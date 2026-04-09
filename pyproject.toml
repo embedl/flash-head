@@ -8,8 +8,26 @@ build-backend = "setuptools.build_meta"
 name = "flash-head"
 dynamic = ["version"]
 description = "FlashHead: vLLM Plugin for Fast Language Model Head Inference"
+readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = []  # torch, safetensors, huggingface_hub provided by vLLM
+keywords = ["vllm", "llm", "inference", "optimization", "lm-head", "plugin"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Embedl/flash-head"
+Repository = "https://github.com/Embedl/flash-head"
+Issues = "https://github.com/Embedl/flash-head/issues"
 
 [project.entry-points."vllm.general_plugins"]
 flash_head = "flash_head:register"
