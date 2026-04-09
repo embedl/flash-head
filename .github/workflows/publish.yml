@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to GitHub
 
 on:
   workflow_dispatch:
@@ -33,6 +33,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ steps.get_version.outputs.version }}"
+
+          # Manual trigger — skip diff check, only check for duplicate
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if gh release view "${TAG}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              echo "Release ${TAG} already exists — skipping."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
 
           # Check if this version was already released
           if gh release view "${TAG}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
