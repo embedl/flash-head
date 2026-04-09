@@ -96,6 +96,7 @@ jobs:
       - check-version
       - release
     permissions:
+      contents: read
       id-token: write
     environment:
       name: pypi
