@@ -25,9 +25,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Embedl/flash-head"
 Repository = "https://github.com/Embedl/flash-head"
 Issues = "https://github.com/Embedl/flash-head/issues"
+"Model Collection" = "https://huggingface.co/collections/embedl/flashhead"
 
 [project.entry-points."vllm.general_plugins"]
 flash_head = "flash_head:register"
