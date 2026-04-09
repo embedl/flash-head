@@ -89,3 +89,28 @@ jobs:
             --title "v${{ needs.check-version.outputs.version }}" \
             --generate-notes \
             dist/*
+
+  pypi-publish:
+    runs-on: ubuntu-latest
+    needs:
+      - check-version
+      - release
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/flash-head
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir dist
+          gh release download "v${{ needs.check-version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --dir dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
