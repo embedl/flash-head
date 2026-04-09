@@ -29,6 +29,8 @@ def register():
         return
     _patches_applied = True
 
+    _register_architectures()
+
     if os.environ.get("FLASHHEAD_ENABLED", "1") == "0":
         logger.info("[FlashHead] Disabled via FLASHHEAD_ENABLED=0")
         return
@@ -36,7 +38,6 @@ def register():
     from flash_head.patches import apply_all
 
     apply_all()
-    _register_architectures()
     logger.info("[FlashHead] Plugin registered")
 
 
@@ -59,7 +60,7 @@ def _register_architectures():
             "FlashHeadLlamaForCausalLM": "vllm.model_executor.models.llama:LlamaForCausalLM",
             "FlashHeadQwen3ForCausalLM": "vllm.model_executor.models.qwen3:Qwen3ForCausalLM",
             "FlashHeadQwen3VLForConditionalGeneration": "vllm.model_executor.models.qwen3_vl:Qwen3VLForConditionalGeneration",
-            "FlashHeadGemma3ForCausalLM": "vllm.model_executor.models.gemma2:Gemma2ForCausalLM",
+            "FlashHeadGemma3ForCausalLM": "vllm.model_executor.models.gemma3:Gemma3ForCausalLM",
         }
 
         supported = ModelRegistry.get_supported_archs()

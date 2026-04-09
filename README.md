@@ -139,13 +139,13 @@ FlashHead models use a custom architecture name (e.g., `FlashHeadQwen3VLForCondi
 
 ### 🏗️ Supported Architectures
 
-See most recent architectures in [_FLASHHEAD_ARCHITECTURES](https://github.com/embedl/flash-head/src/flash_head/__init__.py):
+See most recent architectures in [_FLASHHEAD_ARCHITECTURES](https://github.com/embedl/flash-head/blob/master/src/flash_head/__init__.py):
 ```python
 _FLASHHEAD_ARCHITECTURES = {
     "FlashHeadLlamaForCausalLM": "vllm.model_executor.models.llama:LlamaForCausalLM",
     "FlashHeadQwen3ForCausalLM": "vllm.model_executor.models.qwen3:Qwen3ForCausalLM",
     "FlashHeadQwen3VLForConditionalGeneration": "vllm.model_executor.models.qwen3_vl:Qwen3VLForConditionalGeneration",
-    "FlashHeadGemma3ForCausalLM": "vllm.model_executor.models.gemma2:Gemma2ForCausalLM",
+    "FlashHeadGemma3ForCausalLM": "vllm.model_executor.models.gemma3:Gemma3ForCausalLM",
 }
 ```
 
@@ -199,6 +199,7 @@ We welcome contributions, feedback, and collaboration. Whether you're interested
 flash-head/
 ├── src/flash_head/
 │   ├── __init__.py              # Plugin entry point (register)
+│   ├── _version.py              # Package version
 │   ├── flash_head.py            # Core clustering-based head
 │   ├── loading.py               # Model/asset loading from HF Hub
 │   └── patches/                 # vLLM runtime patches
