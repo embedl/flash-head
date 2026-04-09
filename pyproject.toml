@@ -25,6 +25,7 @@ classifiers = [
 ]
 
 [project.urls]
+Homepage = "https://www.embedl.com/models"
 Repository = "https://github.com/Embedl/flash-head"
 Issues = "https://github.com/Embedl/flash-head/issues"
 "Model Collection" = "https://huggingface.co/collections/embedl/flashhead"
