@@ -5,7 +5,7 @@
 ### vLLM Plugin for Fast Language Model Head Inference
 
 
-The dense classification head accounts for up to 60% of parameters in small LLMs and roughly half of decode-step compute. FlashHead replaces it with a two-stage retrieval pipeline — **up to 2.0x model-level inference speedup** while maintaining accuracy -- training-free and hardware-friendly. FlashHead integrates via vLLM's official `vllm.general_plugins` entry point: no source patches, no custom Docker image.
+The dense classification head accounts for up to 60% of parameters in small LLMs and roughly half of decode-step compute. FlashHead replaces it with a two-stage retrieval pipeline — **up to 2.0x model-level inference speedup** while maintaining accuracy — training-free and hardware-friendly. FlashHead integrates via vLLM's official `vllm.general_plugins` entry point: no source patches, no custom Docker image.
 
 <a href="https://python.org/">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python" />

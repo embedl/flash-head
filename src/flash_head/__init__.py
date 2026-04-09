@@ -15,6 +15,8 @@ or custom Docker images.
 import logging
 import os
 
+from flash_head._version import __version__
+
 logger = logging.getLogger(__name__)
 
 _patches_applied = False
