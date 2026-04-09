@@ -38,16 +38,16 @@ The dense classification head accounts for up to 60% of parameters in small LLMs
 The standard LM head computes a dense matrix multiplication $h_t × W_{vocab}$ at every decode step, scoring all Vocabulary tokens regardless of relevance. FlashHead reframes this as a two-stage retrieval problem over clustered token embeddings: first identify which regions of vocabulary space are relevant, then score only those candidates.
 
 <p align="center">
-  <img src="docs/flash_head_flow_diagram.svg"  width="75%" />
+  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_flow_diagram.svg"  width="75%" />
 </p>
 
 > **⚡ Key Tradeoff** A dense head scores **128,256 tokens per step** (for a 128K vocabulary). With *c = 8,016* clusters and *p = 256* probes, FlashHead scores only **8,016 + 256 × 16 = 12,112 tokens**, a <span style="color:#22c55e; font-weight:600;">10× reduction</span> in scored tokens, while multi-probe retrieval maintains near-perfect recall of the correct next token.
 
 
 <p align="center" width="100%">
-  <img src="docs/dense_head_scoring.svg" width="30%"/>
-  <img src="docs/arrow.svg" width="4%"/>
-  <img src="docs/flash_head_scoring.svg" width="30%"/>
+  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/dense_head_scoring.svg" width="30%"/>
+  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/arrow.svg" width="4%"/>
+  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_scoring.svg" width="30%"/>
 </p>
 
 <strong>Note.</strong> The offline clustering step runs once per model and adds zero overhead at inference time.
