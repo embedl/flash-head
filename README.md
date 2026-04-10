@@ -5,7 +5,7 @@
 ### vLLM Plugin for Fast Language Model Head Inference
 
 
-The dense classification head accounts for up to 60% of parameters in small LLMs and roughly half of decode-step compute. FlashHead replaces it with a two-stage retrieval pipeline — **up to 2.0x model-level inference speedup** while maintaining accuracy — training-free and hardware-friendly. FlashHead integrates via vLLM's official `vllm.general_plugins` entry point: no source patches, no custom Docker image.
+The dense classification head accounts for up to 60% of parameters in small LLMs and roughly half of decode-step compute. FlashHead replaces it with a two-stage retrieval pipeline—**up to 2.0x model-level inference speedup** while maintaining accuracy—training-free and hardware-friendly. FlashHead integrates via vLLM's official `vllm.general_plugins` entry point: no source patches, no custom Docker image.
 
 <a href="https://python.org/">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python" />
@@ -38,16 +38,28 @@ The dense classification head accounts for up to 60% of parameters in small LLMs
 The standard LM head computes a dense matrix multiplication $h_t × W_{vocab}$ at every decode step, scoring all Vocabulary tokens regardless of relevance. FlashHead reframes this as a two-stage retrieval problem over clustered token embeddings: first identify which regions of vocabulary space are relevant, then score only those candidates.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_flow_diagram.svg"  width="75%" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_flow_diagram_dark.svg" />
+    <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_flow_diagram.svg" width="75%" />
+  </picture>
 </p>
 
 > **⚡ Key Tradeoff** A dense head scores **128,256 tokens per step** (for a 128K vocabulary). With *c = 8,016* clusters and *p = 256* probes, FlashHead scores only **8,016 + 256 × 16 = 12,112 tokens**, a <span style="color:#22c55e; font-weight:600;">10× reduction</span> in scored tokens, while multi-probe retrieval maintains near-perfect recall of the correct next token.
 
 
 <p align="center" width="100%">
-  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/dense_head_scoring.svg" width="30%"/>
-  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/arrow.svg" width="4%"/>
-  <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_scoring.svg" width="30%"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/dense_head_scoring_dark.svg" />
+    <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/dense_head_scoring.svg" width="30%"/>
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/arrow_dark.svg" />
+    <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/arrow.svg" width="4%"/>
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_scoring_dark.svg" />
+    <img src="https://raw.githubusercontent.com/Embedl/flash-head/master/docs/flash_head_scoring.svg" width="30%"/>
+  </picture>
 </p>
 
 <strong>Note.</strong> The offline clustering step runs once per model and adds zero overhead at inference time.
@@ -165,7 +177,7 @@ For the safety check to work, FlashHead models should use this `config.json` str
 - `architectures` uses the `FlashHead*` prefix so vLLM rejects the model without the plugin
 - `model_type` stays standard so vLLM can resolve the base model class
 - `flash_head_cache_dir` points to the clustering cache directory
-- Do NOT include `auto_map` -- the plugin handles registration
+- Do NOT include `auto_map`—the plugin handles registration
 
 
 ## 🗺️ Roadmap
@@ -184,7 +196,7 @@ For the safety check to work, FlashHead models should use this `config.json` str
 
 ## 🤝 Contributing
 
-We welcome contributions, feedback, and collaboration. Whether you're interested in adding support for new architectures, improving performance, or integrating FlashHead into your own inference stack -- we'd love to hear from you.
+We welcome contributions, feedback, and collaboration. Whether you're interested in adding support for new architectures, improving performance, or integrating FlashHead into your own inference stack—we'd love to hear from you.
 
 - **Report issues** Bug reports and feature requests help us improve. [Open an issue](https://github.com/embedl/flash-head/issues/new).
 - **Submit PRs** Code contributions for new architectures, optimizations, or bug fixes.

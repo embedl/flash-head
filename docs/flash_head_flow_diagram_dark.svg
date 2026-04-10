@@ -1,0 +1,40 @@
+<svg width="100%" viewBox="0 0 1370 260" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .box { fill: none; stroke-width: 2; rx: 20; }
+    .text-title { font: 18px sans-serif; letter-spacing: 3px; font-weight: 600; }
+    .text-main { font: 22px sans-serif; fill: #e6edf3; font-weight: 600; }
+    .arrow { stroke: #94a3b8; stroke-width: 2; }
+  </style>
+
+  <!-- OFFLINE -->
+  <rect x="20" y="30" width="260" height="160" class="box" stroke="#6b7cff"/>
+  <text x="150" y="80" text-anchor="middle" class="text-title" fill="#7c8cff">OFFLINE</text>
+  <text x="150" y="130" text-anchor="middle" class="text-main">Cluster Embeddings</text>
+
+  <!-- Arrow 1 -->
+  <line x1="290" y1="110" x2="330" y2="110" class="arrow"/>
+  <polygon points="330,110 320,104 320,116" fill="#94a3b8"/>
+
+  <!-- STAGE 1 -->
+  <rect x="350" y="30" width="300" height="160" class="box" stroke="#38bdf8"/>
+  <text x="500" y="80" text-anchor="middle" class="text-title" fill="#38bdf8">STAGE 1</text>
+  <text x="500" y="130" text-anchor="middle" class="text-main">Score Centroids</text>
+
+  <!-- Arrow 2 -->
+  <line x1="660" y1="110" x2="700" y2="110" class="arrow"/>
+  <polygon points="700,110 690,104 690,116" fill="#94a3b8"/>
+
+  <!-- STAGE 2 -->
+  <rect x="720" y="30" width="300" height="160" class="box" stroke="#34d399"/>
+  <text x="870" y="80" text-anchor="middle" class="text-title" fill="#34d399">STAGE 2</text>
+  <text x="870" y="130" text-anchor="middle" class="text-main">Score Candidates</text>
+
+  <!-- Arrow 3 -->
+  <line x1="1030" y1="110" x2="1070" y2="110" class="arrow"/>
+  <polygon points="1070,110 1060,104 1060,116" fill="#94a3b8"/>
+
+  <!-- OUTPUT -->
+  <rect x="1090" y="30" width="260" height="160" class="box" stroke="#7c8cff"/>
+  <text x="1220" y="80" text-anchor="middle" class="text-title" fill="#7c8cff">OUTPUT</text>
+  <text x="1220" y="130" text-anchor="middle" class="text-main">Next Token</text>
+</svg>
