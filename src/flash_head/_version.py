@@ -2,4 +2,4 @@
 
 """FlashHead package version. Bump this to trigger a PyPI release."""
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"

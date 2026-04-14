@@ -133,23 +133,18 @@ def get_flash_head() -> Optional[nn.Module]:
 
     model_path = metadata["model_path"]
     cache_dir = metadata["cache_dir"]
-    vocab_size = metadata["vocab_size"]
-    hidden_size = metadata["hidden_size"]
     special_token_ids = metadata["special_token_ids"]
-    n_clusters = metadata.get("n_clusters")
     n_probes = metadata.get("n_probes")
     dtype_str = metadata.get("dtype", "torch.bfloat16")
     dtype = torch.bfloat16 if dtype_str == "torch.bfloat16" else torch.float16
 
     w, chosen_key = _load_lm_head_weight(model_path)
-    if w.shape != (vocab_size, hidden_size):
-        if w.shape == (hidden_size, vocab_size):
-            w = w.t().contiguous()
-        else:
-            raise ValueError(
-                f"Unexpected lm_head weight shape {tuple(w.shape)}; "
-                f"expected {(vocab_size, hidden_size)} or {(hidden_size, vocab_size)}"
-            )
+    # lm_head weight is (vocab_size, hidden_size); vocab_size is the larger dim
+    if w.shape[0] >= w.shape[1]:
+        vocab_size, hidden_size = w.shape
+    else:
+        hidden_size, vocab_size = w.shape
+        w = w.t().contiguous()
 
     dummy_lm_head = torch.nn.Linear(hidden_size, vocab_size, bias=False)
     dummy_lm_head.weight.data.copy_(w)
@@ -160,7 +155,6 @@ def get_flash_head() -> Optional[nn.Module]:
             dummy_lm_head,
             cache_dir=cache_dir,
             model_or_dir=model_path,
-            n_clusters=n_clusters,
         ),
         n_probes=n_probes,
         special_token_ids=special_token_ids,
@@ -193,21 +187,13 @@ def load_flash_head_from_checkpoint(model: str, dtype=torch.bfloat16):
     if _is_local_dir(model) and not os.path.isabs(cache_dir):
         cache_dir = os.path.join(model, cache_dir)
 
-    # Look for vocab_size/hidden_size in config or nested text_config
-    text_config = config_dict.get("text_config", {})
-    vocab_size = config_dict.get("vocab_size") or text_config.get("vocab_size")
-    hidden_size = config_dict.get("hidden_size") or text_config.get("hidden_size")
     special_token_ids = config_dict.get("flash_head_special_token_ids")
-    n_clusters = config_dict.get("n_clusters")
     n_probes = config_dict.get("n_probes")
 
     metadata = {
         "model_path": model,
         "cache_dir": cache_dir,
-        "vocab_size": vocab_size,
-        "hidden_size": hidden_size,
         "special_token_ids": special_token_ids,
-        "n_clusters": n_clusters,
         "n_probes": n_probes,
         "dtype": str(dtype),
     }

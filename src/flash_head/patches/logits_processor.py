@@ -28,7 +28,9 @@ def patch_logits_processor():
 
     def _patched_get_logits(self, hidden_states, lm_head, embedding_bias):
         flash_head = _get_flash_head()
-        if flash_head is not None:
+        # Only use FlashHead for single-token decode; let vLLM handle
+        # prefill natively (shape[0] > 1 means multiple tokens).
+        if flash_head is not None and hidden_states.shape[0] == 1:
             hs = hidden_states.unsqueeze(0) if hidden_states.dim() == 2 else hidden_states
             token_ids = flash_head.get_next_token(hs)
             if token_ids.dim() == 0:

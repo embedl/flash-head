@@ -2,7 +2,6 @@
 
 """Flash head implementation for faster efficient language model head."""
 
-import json
 import os
 from typing import Iterable, Optional, Union
 
@@ -45,29 +44,9 @@ def _get_centroids(
     original_shape = lm_head.weight.shape  # (vocab, hidden)
 
     cache_file_rel = os.path.join(cache_dir, "clustering_cache.safetensors")
-    meta_file_rel = os.path.join(cache_dir, "clustering_config.json")
-
     cache_file = _resolve_asset(model_or_dir, cache_file_rel)
-    meta_file = _resolve_asset(model_or_dir, meta_file_rel)
 
     try:
-        with open(meta_file, encoding="utf-8") as f:
-            metadata = json.load(f)
-
-        if metadata.get("format") not in (None, "safetensors"):
-            raise ValueError(
-                f"Expected safetensors format, found: {metadata.get('format')}"
-            )
-
-        if metadata.get("vocab_size") != original_shape[0]:
-            raise ValueError(
-                f"Cache vocab_size {metadata.get('vocab_size')} != expected {original_shape[0]}"
-            )
-        if metadata.get("hidden_size") != original_shape[1]:
-            raise ValueError(
-                f"Cache hidden_size {metadata.get('hidden_size')} != expected {original_shape[1]}"
-            )
-
         tensors = load_file(cache_file)
 
         if "centroids" not in tensors or "cluster_assignments" not in tensors:
@@ -101,37 +80,29 @@ def get_flash_head_parameters(
     lm_head: nn.Module,
     cache_dir: str,
     model_or_dir: str,
-    n_clusters: Optional[int] = None,
 ) -> dict:
     """Get parameters for the FlashHead layer.
 
     :param lm_head: The language model head to replace.
     :param cache_dir: Directory to flash head artifacts.
     :param model_or_dir: The model directory.
-    :param n_clusters: The number of clusters.
     :return: Dict with centroids and vocab_maps_tensor.
     """
-    if n_clusters is None:
-        n_clusters = int(lm_head.weight.shape[0] / DEFAULT_CLUSTER_RATIO)
-
     centroids, cluster_assignments = _get_centroids(
         lm_head=lm_head,
         model_or_dir=model_or_dir,
         cache_dir=cache_dir,
     )
-    total_clusters = n_clusters
-    original_shape = lm_head.weight.shape
+    centroids_reshaped = centroids.squeeze(0).squeeze(0)
+    total_clusters = centroids_reshaped.shape[1]
     cluster_to_vocab_maps = [
         torch.where(cluster_assignments == i)[0] for i in range(total_clusters)
     ]
 
-    combined_centroids = torch.zeros(
-        (original_shape[1], total_clusters),
+    combined_centroids = centroids_reshaped.to(
         device=lm_head.weight.device,
         dtype=lm_head.weight.dtype,
     )
-    centroids_reshaped = centroids.squeeze(0).squeeze(0)
-    combined_centroids[:, :n_clusters] = centroids_reshaped
     max_len = max(m.shape[0] for m in cluster_to_vocab_maps)
     vocab_maps_tensor = torch.full(
         (len(cluster_to_vocab_maps), max_len), -1, device=lm_head.weight.device
@@ -251,7 +222,7 @@ class FlashHead(nn.Module):
         hidden_states: torch.Tensor,
         top_clusters: torch.Tensor,
         use_identical_tiebreak: bool,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
         B, T, _ = hidden_states.shape
         if B != 1:
             raise NotImplementedError("FlashHead currently supports batch size = 1 only")
@@ -281,7 +252,7 @@ class FlashHead(nn.Module):
             bias=None,
         )
 
-        return logits, mapping
+        return logits, mapping, indices
 
     def get_next_token_standard(
         self,
@@ -322,12 +293,12 @@ class FlashHead(nn.Module):
             do_sample=do_sample,
             temperature=temperature,
         )
-        cluster_logits, mapping = self._get_cluster_logits(
+        cluster_logits, mapping, indices = self._get_cluster_logits(
             hidden_states, top_clusters, use_identical_tiebreak
         )
 
         if do_sample:
-            probs = (cluster_logits / temperature).softmax(dim=-1)
+            probs = (cluster_logits[:, -1, :] / temperature).softmax(dim=-1)
             cluster_token_idx = torch.multinomial(probs, num_samples=1)
         else:
             cluster_token_idx = cluster_logits.argmax(
@@ -335,22 +306,6 @@ class FlashHead(nn.Module):
             )
             if use_identical_tiebreak:
                 cluster_token_idx = mapping[cluster_token_idx]
-
-        # Handle both 1D (from T>1 with .unique()) and 3D (from T==1) cases
-        if top_clusters.dim() == 1:
-            cluster_indices = top_clusters
-        else:
-            cluster_indices = top_clusters[0, 0]
-
-        maps = self.vocab_maps_tensor.index_select(0, cluster_indices)
-        indices = maps.flatten().to(torch.int64)
-        if self.special_token_ids_tensor.numel() > 0:
-            special_ids = self.special_token_ids_tensor.to(
-                device=indices.device
-            )
-            indices = torch.unique(torch.cat([indices, special_ids], dim=0))
-        if use_identical_tiebreak:
-            indices = indices.sort().values
 
         vocab_index = indices[cluster_token_idx]
         return vocab_index[0]
