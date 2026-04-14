@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-RESULT_DIR = "/tmp/flashhead_bench"
+RESULT_DIR = os.environ.get("FLASHHEAD_BENCH_DIR", "/tmp/flashhead_bench")
 BENCHMARK_MODE = os.environ.get("BENCHMARK_MODE", "both")
 
 

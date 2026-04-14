@@ -55,9 +55,23 @@ export HF_TOKEN
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
 
 BENCH_DIR="$HOME/tmp/flashhead_bench"
+VENV_DIR="$HOME/tmp/flash-head-venv"
 mkdir -p "$BENCH_DIR"
 
-source "$HOME/.venv/bin/activate"
+if ! command -v uv &>/dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+source "$HOME/.local/bin/env"
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo "=== Creating venv ==="
+    uv venv "$VENV_DIR" --python 3.12 --seed
+    source "$VENV_DIR/bin/activate"
+    uv pip install vllm==0.13 --torch-backend=auto
+else
+    source "$VENV_DIR/bin/activate"
+fi
+
 pip install "$HOME/tmp/flash-head" 2>&1 | tail -1
 
 if [ "$BENCHMARK_MODE" = "python" ]; then
@@ -84,6 +98,7 @@ if [ "$BENCHMARK_MODE" = "python" ]; then
 
     echo "=== Running comparison tests ==="
     pip install pytest 2>&1 | tail -1
+    FLASHHEAD_BENCH_DIR="$BENCH_DIR" \
     python3 -m pytest "$HOME/tmp/flash-head/tests/test_compare.py" -v -s
 fi
 
