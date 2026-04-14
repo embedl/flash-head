@@ -251,7 +251,7 @@ class FlashHead(nn.Module):
         hidden_states: torch.Tensor,
         top_clusters: torch.Tensor,
         use_identical_tiebreak: bool,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
         B, T, _ = hidden_states.shape
         if B != 1:
             raise NotImplementedError("FlashHead currently supports batch size = 1 only")
@@ -281,7 +281,7 @@ class FlashHead(nn.Module):
             bias=None,
         )
 
-        return logits, mapping
+        return logits, mapping, indices
 
     def get_next_token_standard(
         self,
@@ -322,12 +322,12 @@ class FlashHead(nn.Module):
             do_sample=do_sample,
             temperature=temperature,
         )
-        cluster_logits, mapping = self._get_cluster_logits(
+        cluster_logits, mapping, indices = self._get_cluster_logits(
             hidden_states, top_clusters, use_identical_tiebreak
         )
 
         if do_sample:
-            probs = (cluster_logits / temperature).softmax(dim=-1)
+            probs = (cluster_logits[:, -1, :] / temperature).softmax(dim=-1)
             cluster_token_idx = torch.multinomial(probs, num_samples=1)
         else:
             cluster_token_idx = cluster_logits.argmax(
@@ -335,22 +335,6 @@ class FlashHead(nn.Module):
             )
             if use_identical_tiebreak:
                 cluster_token_idx = mapping[cluster_token_idx]
-
-        # Handle both 1D (from T>1 with .unique()) and 3D (from T==1) cases
-        if top_clusters.dim() == 1:
-            cluster_indices = top_clusters
-        else:
-            cluster_indices = top_clusters[0, 0]
-
-        maps = self.vocab_maps_tensor.index_select(0, cluster_indices)
-        indices = maps.flatten().to(torch.int64)
-        if self.special_token_ids_tensor.numel() > 0:
-            special_ids = self.special_token_ids_tensor.to(
-                device=indices.device
-            )
-            indices = torch.unique(torch.cat([indices, special_ids], dim=0))
-        if use_identical_tiebreak:
-            indices = indices.sort().values
 
         vocab_index = indices[cluster_token_idx]
         return vocab_index[0]
