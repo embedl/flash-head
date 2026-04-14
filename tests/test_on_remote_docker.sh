@@ -83,7 +83,7 @@ if [ "${BENCHMARK_MODE}" = "python" ] || [ "${BENCHMARK_MODE}" = "both" ]; then
         ${IMAGE} \
         bash -c "\${INSTALL_CMD} && python3 /opt/flash-head/tests/run_benchmark.py \
             --model ${MODEL} \
-            --max-tokens 128 --num-warmup 5 --num-runs 20 \
+            --max-tokens 128 --num-warmup 10 --num-runs 10 \
             --gpu-mem 0.75 --max-model-len 4096 \
             --output /tmp/flashhead_bench/python_baseline.json \
             --label python-baseline"
@@ -96,7 +96,7 @@ if [ "${BENCHMARK_MODE}" = "python" ] || [ "${BENCHMARK_MODE}" = "both" ]; then
         ${IMAGE} \
         bash -c "\${INSTALL_CMD} && python3 /opt/flash-head/tests/run_benchmark.py \
             --model ${MODEL} \
-            --max-tokens 128 --num-warmup 5 --num-runs 20 \
+            --max-tokens 128 --num-warmup 10 --num-runs 10 \
             --gpu-mem 0.75 --max-model-len 4096 \
             --output /tmp/flashhead_bench/python_flashhead.json \
             --label python-flashhead"
@@ -111,7 +111,7 @@ if [ "${BENCHMARK_MODE}" = "cli" ] || [ "${BENCHMARK_MODE}" = "both" ]; then
         ${IMAGE} \
         bash -c "\${INSTALL_CMD} && vllm bench latency \
             --model ${MODEL} \
-            --num-iters-warmup 5 --num-iters 20 \
+            --num-iters-warmup 10 --num-iters 10 \
             --batch-size 1 \
             --max-model-len 4096 \
             --gpu-mem 0.75 \
@@ -125,7 +125,7 @@ if [ "${BENCHMARK_MODE}" = "cli" ] || [ "${BENCHMARK_MODE}" = "both" ]; then
         ${IMAGE} \
         bash -c "\${INSTALL_CMD} && vllm bench latency \
             --model ${MODEL} \
-            --num-iters-warmup 5 --num-iters 20 \
+            --num-iters-warmup 10 --num-iters 10 \
             --batch-size 1 \
             --max-model-len 4096 \
             --gpu-mem 0.75 \
