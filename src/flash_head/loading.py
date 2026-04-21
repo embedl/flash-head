@@ -57,6 +57,9 @@ def _find_weight_key_in_index(index_json: dict) -> Optional[str]:
     for k in LM_HEAD_KEYS:
         if k in weight_map:
             return k
+    for k in weight_map:
+        if k.endswith("lm_head.weight") or k.endswith("embed_tokens.weight"):
+            return k
     return None
 
 
