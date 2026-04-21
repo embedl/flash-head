@@ -60,6 +60,10 @@ def _register_architectures():
             "FlashHeadLlamaForCausalLM": "vllm.model_executor.models.llama:LlamaForCausalLM",
             "FlashHeadQwen3ForCausalLM": "vllm.model_executor.models.qwen3:Qwen3ForCausalLM",
             "FlashHeadQwen3VLForConditionalGeneration": "vllm.model_executor.models.qwen3_vl:Qwen3VLForConditionalGeneration",
+            "FlashHeadQwen3_5ForCausalLM": "vllm.model_executor.models.qwen3_5:Qwen3_5ForCausalLM",
+            "FlashHeadQwen3_5MoeForCausalLM": "vllm.model_executor.models.qwen3_5:Qwen3_5MoeForCausalLM",
+            "FlashHeadQwen3_5ForConditionalGeneration": "vllm.model_executor.models.qwen3_5:Qwen3_5ForConditionalGeneration",
+            "FlashHeadQwen3_5MoeForConditionalGeneration": "vllm.model_executor.models.qwen3_5:Qwen3_5MoeForConditionalGeneration",
             "FlashHeadGemma3ForCausalLM": "vllm.model_executor.models.gemma3:Gemma3ForCausalLM",
         }
 
