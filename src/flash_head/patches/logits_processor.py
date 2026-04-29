@@ -8,19 +8,17 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-_flash_head = None
+# Sentinel for lazy loading: distinguishes "not yet checked" from
+# "checked, no FlashHead available" (e.g. non-FlashHead models, where
+# get_flash_head() legitimately returns None).
+_FLASH_HEAD_NOT_LOADED = object()
+_flash_head = _FLASH_HEAD_NOT_LOADED
 
 
 def _get_flash_head():
-    """Return the FlashHead module, lazy-loading on first successful call.
-
-    Negative results are NOT cached: if metadata is not yet available we keep
-    returning None and recheck on the next call. This makes it safe to write
-    `/tmp/flashhead_metadata.pt` after server startup (e.g. when the engine
-    was constructed through a vLLM entry point we don't patch directly).
-    """
+    """Return the FlashHead module, lazy-loading on first call."""
     global _flash_head
-    if _flash_head is None:
+    if _flash_head is _FLASH_HEAD_NOT_LOADED:
         from flash_head.loading import get_flash_head
         _flash_head = get_flash_head()
     return _flash_head
