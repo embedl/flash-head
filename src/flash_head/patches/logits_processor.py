@@ -8,12 +8,15 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-# Sentinel for lazy loading
+# Sentinel for lazy loading: distinguishes "not yet checked" from
+# "checked, no FlashHead available" (e.g. non-FlashHead models, where
+# get_flash_head() legitimately returns None).
 _FLASH_HEAD_NOT_LOADED = object()
 _flash_head = _FLASH_HEAD_NOT_LOADED
 
 
 def _get_flash_head():
+    """Return the FlashHead module, lazy-loading on first call."""
     global _flash_head
     if _flash_head is _FLASH_HEAD_NOT_LOADED:
         from flash_head.loading import get_flash_head

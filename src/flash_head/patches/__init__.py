@@ -12,7 +12,8 @@ Patched components:
 3. RejectionSampler.forward - greedy comparison for speculative decoding
 4. EagleProposer._greedy_sample - handle FlashHead in draft proposals
 5. GPUModelRunner._dummy_sampler_run - skip warmup for token IDs
-6. LLMEngine.from_engine_args - load FlashHead metadata before engine init
+6. LLMEngine.from_engine_args - load FlashHead metadata (Python LLM API)
+7. AsyncLLM.__init__ - load FlashHead metadata (vllm serve / OpenAI API)
 """
 
 import logging
@@ -28,6 +29,7 @@ def apply_all():
     from flash_head.patches.eagle import patch_eagle
     from flash_head.patches.gpu_model_runner import patch_gpu_model_runner
     from flash_head.patches.llm import patch_llm
+    from flash_head.patches.async_llm import patch_async_llm
 
     patch_logits_processor()
     patch_sampler()
@@ -35,5 +37,6 @@ def apply_all():
     patch_eagle()
     patch_gpu_model_runner()
     patch_llm()
+    patch_async_llm()
 
     logger.info("[FlashHead] All patches applied")
