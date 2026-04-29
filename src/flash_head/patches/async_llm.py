@@ -1,19 +1,10 @@
 # Copyright (C) 2026 Embedl AB
 
-"""Patch AsyncLLM to load FlashHead metadata.
+"""Patch AsyncLLM.__init__ to load FlashHead metadata.
 
-The existing `patch_llm()` only covers `vllm.v1.engine.llm_engine.LLMEngine.
-from_engine_args`, which is the entry point used by the offline Python
-`LLM(...)` API. The `vllm serve` CLI in vLLM >= 0.19 goes through
-`vllm.entrypoints.openai.api_server.build_async_engine_client_from_engine_args`
-→ `AsyncLLM.from_vllm_config` → `AsyncLLM.__init__`, which never calls
-`LLMEngine.from_engine_args`. Without this patch, metadata never gets
-written for `vllm serve` and FlashHead silently falls back to the dense
-lm_head on every decode step.
-
-We patch `AsyncLLM.__init__` so the metadata-load happens regardless of
-which constructor is used (`from_engine_args`, `from_vllm_config`, or the
-raw `AsyncLLM(vllm_config=...)` form).
+We patch AsyncLLM.__init__ in addition to LLMEngine.from_engine_args so the
+metadata load also runs under `vllm serve`, which reaches the engine via
+AsyncLLM.from_vllm_config and bypasses LLMEngine.from_engine_args.
 """
 
 import logging
