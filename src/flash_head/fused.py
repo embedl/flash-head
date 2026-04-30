@@ -158,7 +158,9 @@ def _block_sparse_atomic_kernel(
     val_bits = best_val.to(tl.int32, bitcast=True)
     key = tl.where(val_bits >= 0, val_bits, (~val_bits) ^ -2147483648)
 
-    packed = (key.to(tl.int64) << 32) | (vocab_id & 0xFFFFFFFF)
+    # Pack ~vocab_id in the low bits so atomic_max picks the smaller vocab_id
+    # on tied keys, matching torch.argmax's first-index tie-break.
+    packed = (key.to(tl.int64) << 32) | ((~vocab_id) & 0xFFFFFFFF)
     tl.atomic_max(OUT_PACKED + pid_t, packed)
 
 
@@ -169,9 +171,8 @@ def block_sparse_argmax_atomic(
     into a [T] packed int64. Unpack to get [T] vocab_ids.
 
     No intermediate [T, P] arrays; no follow-up argmax/gather kernels.
-    Saves 4-7 us / call vs block_sparse_logits_argmax. Bit-equivalent for
-    non-tie inputs (ties break by vocab_id order, which matches the
-    non-atomic path since that also picks topk-arbitrary order for ties).
+    Saves 4-7 us / call vs block_sparse_logits_argmax. Tied logits resolve
+    to the smallest vocab_id (the kernel packs ~vocab_id in the low bits).
     """
     assert hs.dim() == 2 and hs.is_contiguous()
     assert ci.dim() == 2 and ci.dtype == torch.int64
@@ -183,5 +184,5 @@ def block_sparse_argmax_atomic(
         hs, w_perm_flat, ci, vocab_maps_flat, out,
         T=T, D=D, P=P, CAP=cluster_size, BLOCK_D=block_d,
     )
-    # Extract low 32 bits as vocab id. Mask to avoid negative sign extension.
-    return (out & 0xFFFFFFFF).view(T, 1)
+    # Low 32 bits hold ~vocab_id; flip back and mask off sign-extension.
+    return ((~out) & 0xFFFFFFFF).view(T, 1)

@@ -13,6 +13,8 @@ from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from safetensors.torch import load_file
 from torch import nn
 
+from .fused import block_sparse_argmax_atomic
+
 
 def _get_device():
     """Get the device lazily to avoid initializing CUDA at import time."""
@@ -103,14 +105,13 @@ def get_flash_head_parameters(
         device=lm_head.weight.device,
         dtype=lm_head.weight.dtype,
     )
-    max_len = max(m.shape[0] for m in cluster_to_vocab_maps)
-    vocab_maps_tensor = torch.full(
-        (len(cluster_to_vocab_maps), max_len), -1, device=lm_head.weight.device
-    )
-    for i, m in enumerate(cluster_to_vocab_maps):
-        length = m.shape[0]
-        vocab_maps_tensor[i, :length] = m
-        vocab_maps_tensor[i, length:] = m[0]
+    sizes = {m.shape[0] for m in cluster_to_vocab_maps}
+    if len(sizes) != 1:
+        raise ValueError(
+            "FlashHead requires balanced clusters; got cluster sizes "
+            f"{sorted(sizes)} across {len(cluster_to_vocab_maps)} clusters."
+        )
+    vocab_maps_tensor = torch.stack(cluster_to_vocab_maps)
     return {
         "centroids": combined_centroids,
         "vocab_maps_tensor": vocab_maps_tensor,
@@ -171,6 +172,15 @@ class FlashHead(nn.Module):
             [special_token_ids] if isinstance(special_token_ids, int)
             else list(special_token_ids or [])
         ) if 0 <= int(t) < V]
+        if st:
+            sp_t = torch.tensor(st, dtype=torch.int64, device=vocab_maps_tensor.device)
+            vm_flat = vocab_maps_tensor.view(-1).to(torch.int64)
+            found = (vm_flat.unsqueeze(0) == sp_t.unsqueeze(1)).any(dim=1)
+            missing = sp_t[~found].tolist()
+            if missing:
+                raise ValueError(
+                    f"special_token_ids missing from vocab_maps: {missing}"
+                )
         self.register_buffer(
             "special_token_ids_tensor",
             torch.tensor(st, dtype=torch.int64),
@@ -299,7 +309,6 @@ class FlashHead(nn.Module):
             and not use_identical_tiebreak
             and self.special_token_ids_tensor.numel() == 0
         ):
-            from .fused import block_sparse_argmax_atomic
             B, T, D = hidden_states.shape
             vocab_id = block_sparse_argmax_atomic(
                 hidden_states.view(T, D),
