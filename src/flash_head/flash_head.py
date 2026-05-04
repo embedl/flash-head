@@ -13,6 +13,8 @@ from huggingface_hub import hf_hub_download, try_to_load_from_cache
 from safetensors.torch import load_file
 from torch import nn
 
+from .fused import block_sparse_argmax_atomic
+
 
 def _get_device():
     """Get the device lazily to avoid initializing CUDA at import time."""
@@ -103,14 +105,13 @@ def get_flash_head_parameters(
         device=lm_head.weight.device,
         dtype=lm_head.weight.dtype,
     )
-    max_len = max(m.shape[0] for m in cluster_to_vocab_maps)
-    vocab_maps_tensor = torch.full(
-        (len(cluster_to_vocab_maps), max_len), -1, device=lm_head.weight.device
-    )
-    for i, m in enumerate(cluster_to_vocab_maps):
-        length = m.shape[0]
-        vocab_maps_tensor[i, :length] = m
-        vocab_maps_tensor[i, length:] = m[0]
+    sizes = {m.shape[0] for m in cluster_to_vocab_maps}
+    if len(sizes) != 1:
+        raise ValueError(
+            "FlashHead requires balanced clusters; got cluster sizes "
+            f"{sorted(sizes)} across {len(cluster_to_vocab_maps)} clusters."
+        )
+    vocab_maps_tensor = torch.stack(cluster_to_vocab_maps)
     return {
         "centroids": combined_centroids,
         "vocab_maps_tensor": vocab_maps_tensor,
@@ -142,43 +143,47 @@ class FlashHead(nn.Module):
     ):
         super().__init__()
 
-        self.original_lm_head = lm_head
+        V, D = lm_head.weight.shape
+        K, cap = vocab_maps_tensor.shape
+        assert K * cap == V, f"unbalanced: K={K}*cap={cap} != V={V}"
         self.original_shape = lm_head.weight.shape
+        self._K, self._cap, self._D = K, cap, D
 
-        self.register_buffer("vocab_maps_tensor", vocab_maps_tensor)
-        self.register_buffer("centroids", centroids.contiguous())
-
-        if n_probes is None:
-            n_probes = int(centroids.shape[1] / DEFAULT_CLUSTER_RATIO)
-        self.n_probes = n_probes
-
-        pre_norm = centroids / centroids.norm(dim=0, keepdim=True)
-        pre_norm = pre_norm.t().contiguous()
-        self.register_buffer("pre_normalized_centroids", pre_norm)
-
-        self.cluster_linear = nn.Linear(
-            pre_norm.shape[1],
-            pre_norm.shape[0],
-            bias=False,
+        self.n_probes = int(
+            n_probes if n_probes is not None
+            else centroids.shape[1] / DEFAULT_CLUSTER_RATIO
         )
+
+        self.register_buffer("centroids", centroids.contiguous())
+        pre_norm = (centroids / centroids.norm(dim=0, keepdim=True)).t().contiguous()
+        self.cluster_linear = nn.Linear(pre_norm.shape[1], pre_norm.shape[0], bias=False)
         self.cluster_linear.weight = nn.Parameter(pre_norm)
 
-        special_token_list = []
-        if special_token_ids is None:
-            special_token_list = []
-        elif isinstance(special_token_ids, int):
-            special_token_list = [special_token_ids]
-        else:
-            special_token_list = list(special_token_ids)
+        perm = vocab_maps_tensor.reshape(-1).to(
+            device=lm_head.weight.device, dtype=torch.int64,
+        )
+        self.register_buffer(
+            "w_perm",
+            lm_head.weight.index_select(0, perm).contiguous().view(K, cap, D),
+        )
+        self.register_buffer("vocab_maps", vocab_maps_tensor.to(torch.int64).contiguous())
 
-        vocab_size = int(self.original_shape[0])
-        special_token_list = [
-            int(t) for t in special_token_list if 0 <= int(t) < vocab_size
-        ]
-
+        st = [int(t) for t in (
+            [special_token_ids] if isinstance(special_token_ids, int)
+            else list(special_token_ids or [])
+        ) if 0 <= int(t) < V]
+        if st:
+            sp_t = torch.tensor(st, dtype=torch.int64, device=vocab_maps_tensor.device)
+            vm_flat = vocab_maps_tensor.view(-1).to(torch.int64)
+            found = (vm_flat.unsqueeze(0) == sp_t.unsqueeze(1)).any(dim=1)
+            missing = sp_t[~found].tolist()
+            if missing:
+                raise ValueError(
+                    f"special_token_ids missing from vocab_maps: {missing}"
+                )
         self.register_buffer(
             "special_token_ids_tensor",
-            torch.tensor(special_token_list, dtype=torch.int64),
+            torch.tensor(st, dtype=torch.int64),
             persistent=False,
         )
 
@@ -204,54 +209,55 @@ class FlashHead(nn.Module):
                     probs_flat, self.n_probes, replacement=False
                 )
                 return sampled.view(1, 1, self.n_probes)
-            else:
-                sims = self.cluster_linear(hidden_states.to(_get_device()))
-                _, top = torch.topk(sims, k=self.n_probes, dim=-1)
-                return top
+
+            sims = self.cluster_linear(hidden_states.to(_get_device()))
+            _, top = torch.topk(sims, k=self.n_probes, dim=-1, sorted=False)
+            return top
 
         if do_sample:
             raise NotImplementedError
-        else:
-            sims = self.cluster_linear(hidden_states.to(_get_device()))
-            _, top = torch.topk(sims, k=self.n_probes, dim=-1)
-            top = top.unique()
-            return top
+        sims = self.cluster_linear(hidden_states.to(_get_device()))
+        _, top = torch.topk(sims, k=self.n_probes, dim=-1, sorted=False)
+        return top
 
-    def _get_cluster_logits(
+    def _gather_cluster_logits(
         self,
         hidden_states: torch.Tensor,
         top_clusters: torch.Tensor,
         use_identical_tiebreak: bool,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
-        B, T, _ = hidden_states.shape
+        B, _, _ = hidden_states.shape
         if B != 1:
             raise NotImplementedError("FlashHead currently supports batch size = 1 only")
 
-        # Handle both 1D (from T>1 with .unique()) and 3D (from T==1) cases
-        if top_clusters.dim() == 1:
-            cluster_indices = top_clusters
-        else:
-            cluster_indices = top_clusters[0, 0]
-
-        maps = self.vocab_maps_tensor.index_select(0, cluster_indices)
-        indices = maps.flatten()
+        cluster_indices = top_clusters if top_clusters.dim() == 1 else top_clusters[0, 0]
+        # Row offsets in w_perm for each probed cluster's cap slots.
+        cap = self._cap
+        row_offsets = (cluster_indices.unsqueeze(1) * cap +
+                       torch.arange(cap, device=cluster_indices.device)).flatten()
+        indices = self.vocab_maps.index_select(0, cluster_indices).flatten()
 
         if self.special_token_ids_tensor.numel() > 0:
-            special_ids = self.special_token_ids_tensor.to(indices.device)
-            indices = torch.unique(torch.cat([indices, special_ids], dim=0))
+            sp = self.special_token_ids_tensor.to(indices.device)
+            # Find each special-token's row in w_perm by searching vocab_maps.
+            # Called rarely (fallback path), so O(V) is acceptable.
+            vm_flat = self.vocab_maps.view(-1)
+            sp_rows = (vm_flat.unsqueeze(0) == sp.unsqueeze(1)).int().argmax(dim=1)
+            row_offsets = torch.cat([row_offsets, sp_rows])
+            indices = torch.cat([indices, sp])
+            indices, uniq_idx = torch.unique(indices, return_inverse=True)
+            # Keep one row_offset per unique vocab id.
+            row_offsets = torch.zeros_like(indices).scatter_(0, uniq_idx, row_offsets)
 
         mapping = None
         if use_identical_tiebreak:
             sorted_vals = indices.sort()
             indices = sorted_vals.values
             mapping = sorted_vals.indices
+            row_offsets = row_offsets.index_select(0, sorted_vals.indices)
 
-        logits = torch.nn.functional.linear(
-            hidden_states,
-            self.original_lm_head.weight.index_select(0, indices),
-            bias=None,
-        )
-
+        w_rows = self.w_perm.view(-1, self._D).index_select(0, row_offsets)
+        logits = torch.nn.functional.linear(hidden_states, w_rows, bias=None)
         return logits, mapping, indices
 
     def get_next_token_standard(
@@ -283,29 +289,46 @@ class FlashHead(nn.Module):
         :param use_identical_tiebreak: Reorder logits for deterministic tiebreaking.
         :returns: The next predicted token index.
         """
-        # Fall back to standard lm_head for prompt processing
         if hidden_states.shape[0] > 10:
-            logits = self.original_lm_head(hidden_states)
-            return self.get_next_token_standard(logits, do_sample, temperature)
+            logits = torch.nn.functional.linear(
+                hidden_states, self.w_perm.view(-1, self._D),
+            )
+            if do_sample:
+                probs = (logits[:, -1, :] / temperature).softmax(dim=-1)
+                slot = torch.multinomial(probs, num_samples=1)
+            else:
+                slot = logits[:, -1:].argmax(dim=-1)
+            return self.vocab_maps.view(-1)[slot]
 
         top_clusters = self._get_top_clusters(
-            hidden_states,
-            do_sample=do_sample,
-            temperature=temperature,
-        )
-        cluster_logits, mapping, indices = self._get_cluster_logits(
-            hidden_states, top_clusters, use_identical_tiebreak
+            hidden_states, do_sample=do_sample, temperature=temperature,
         )
 
+        if (
+            not do_sample
+            and not use_identical_tiebreak
+            and self.special_token_ids_tensor.numel() == 0
+        ):
+            B, T, D = hidden_states.shape
+            vocab_id = block_sparse_argmax_atomic(
+                hidden_states.view(T, D),
+                self.w_perm.view(-1),
+                top_clusters.view(T, self.n_probes),
+                self.vocab_maps.view(-1),
+                n_clusters=self._K,
+                cluster_size=self._cap,
+            )
+            return vocab_id.view(T, 1)
+
+        cluster_logits, mapping, indices = self._gather_cluster_logits(
+            hidden_states, top_clusters, use_identical_tiebreak,
+        )
         if do_sample:
             probs = (cluster_logits[:, -1, :] / temperature).softmax(dim=-1)
             cluster_token_idx = torch.multinomial(probs, num_samples=1)
         else:
-            cluster_token_idx = cluster_logits.argmax(
-                dim=-1, keepdim=True
-            )
+            cluster_token_idx = cluster_logits.argmax(dim=-1, keepdim=True)
             if use_identical_tiebreak:
                 cluster_token_idx = mapping[cluster_token_idx]
-
         vocab_index = indices[cluster_token_idx]
         return vocab_index[0]
